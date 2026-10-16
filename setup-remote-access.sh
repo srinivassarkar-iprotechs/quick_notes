@@ -14,8 +14,10 @@
 #   2. installs your public key  -> password-free login
 #   3. opens the local firewall for SSH (ufw / firewalld)
 #   4. hardens Wi-Fi: autoconnect on, power-save off (fixes random drops)
-#   5. installs a self-healing reverse SSH tunnel to the relay (off-site reach)
-#   6. prints exactly how to connect (LAN, and off-site)
+#   5. prints exactly how to connect on the LAN (gpu.local / IP)
+#
+# Optional: pass --tunnel to ALSO set up a self-healing reverse SSH tunnel
+# through a relay host for off-site access (off by default).
 #
 # No Tailscale involved anywhere.
 # ---------------------------------------------------------------------------
@@ -27,7 +29,7 @@ PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNzuwl2Bwcjk++w+LhiCt4w8A3FhnU23YcY
 RELAY_USER="ubuntu"                                                         # user on the always-on relay
 RELAY_HOST="13.233.237.182"                                                 # relay public IP (pp-demo)
 RELAY_PORT="2222"                                                           # port on the relay -> this box:22
-INSTALL_TUNNEL="yes"
+INSTALL_TUNNEL="no"
 WIFI_HARDEN="yes"
 CREATE_USER="no"
 RELAY_IDENTITY=""
@@ -46,7 +48,7 @@ Usage: sudo bash setup-remote-access.sh [options]
   --relay <user@host>  Always-on relay for off-site access    (default: $RELAY_USER@$RELAY_HOST)
   --port <n>           Relay port mapped to this box:22       (default: $RELAY_PORT)
   --relay-key <path>   Private key to auto-authorise the tunnel on the relay
-  --no-tunnel          Skip the reverse tunnel (LAN access only)
+  --tunnel             Also install the off-site reverse tunnel (via relay)
   --no-wifi            Skip Wi-Fi hardening (autoconnect / power-save off)
   -h, --help           Show this help
 EOF
@@ -59,7 +61,7 @@ while [ $# -gt 0 ]; do
     --relay)       RELAY_USER="${2%@*}"; RELAY_HOST="${2#*@}"; shift 2 ;;
     --port)        RELAY_PORT="$2"; shift 2 ;;
     --relay-key)   RELAY_IDENTITY="$2"; shift 2 ;;
-    --no-tunnel)   INSTALL_TUNNEL="no"; shift ;;
+    --tunnel)      INSTALL_TUNNEL="yes"; shift ;;
     --no-wifi)     WIFI_HARDEN="no"; shift ;;
     -h|--help)     usage; exit 0 ;;
     *) die "Unknown option: $1" ;;
@@ -214,10 +216,15 @@ cat <<EOF
   ON THE SAME WI-FI (no Tailscale needed):
       ssh ${SSH_USER}@${HOSTNAME_FQDN}.local
       ssh ${SSH_USER}@${LAN_IP}
+EOF
+
+if [ "$INSTALL_TUNNEL" = yes ]; then
+  cat <<EOF
 
   FROM ANYWHERE (off-site, via relay):
       ssh -J ${RELAY_USER}@${RELAY_HOST} -p ${RELAY_PORT} ${SSH_USER}@127.0.0.1
 EOF
+fi
 
 if [ "$INSTALL_TUNNEL" = yes ] && [ -z "$RELAY_IDENTITY" ]; then
   cat <<EOF

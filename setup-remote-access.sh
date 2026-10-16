@@ -7,7 +7,7 @@
 # Run it ON THE BOX, from the attached monitor/keyboard, as root:
 #
 #   git clone https://github.com/srinivassarkar-iprotechs/quick_notes.git
-#   sudo bash quick_notes/setup-remote-access.sh --user gpu
+#   sudo bash quick_notes/setup-remote-access.sh --user practice
 #
 # What it does (all idempotent):
 #   1. installs + enables an SSH server (openssh) and mDNS (avahi)
@@ -21,7 +21,7 @@
 set -euo pipefail
 
 # --------------------------------- config ----------------------------------
-SSH_USER="gpu"                                                              # login user on THIS box
+SSH_USER="practice"                                                         # login user on THIS box
 PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNzuwl2Bwcjk++w+LhiCt4w8A3FhnU23YcYys7h3xBp mac-access"
 RELAY_USER="ubuntu"                                                         # user on the always-on relay
 RELAY_HOST="13.233.237.182"                                                 # relay public IP (pp-demo)

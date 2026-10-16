@@ -13,8 +13,9 @@
 #   1. installs + enables an SSH server (openssh) and mDNS (avahi)
 #   2. installs your public key  -> password-free login
 #   3. opens the local firewall for SSH (ufw / firewalld)
-#   4. installs a self-healing reverse SSH tunnel to the relay (off-site reach)
-#   5. prints exactly how to connect (LAN, and off-site)
+#   4. hardens Wi-Fi: autoconnect on, power-save off (fixes random drops)
+#   5. installs a self-healing reverse SSH tunnel to the relay (off-site reach)
+#   6. prints exactly how to connect (LAN, and off-site)
 #
 # No Tailscale involved anywhere.
 # ---------------------------------------------------------------------------
@@ -27,6 +28,7 @@ RELAY_USER="ubuntu"                                                         # us
 RELAY_HOST="13.233.237.182"                                                 # relay public IP (pp-demo)
 RELAY_PORT="2222"                                                           # port on the relay -> this box:22
 INSTALL_TUNNEL="yes"
+WIFI_HARDEN="yes"
 CREATE_USER="no"
 RELAY_IDENTITY=""
 
@@ -45,6 +47,7 @@ Usage: sudo bash setup-remote-access.sh [options]
   --port <n>           Relay port mapped to this box:22       (default: $RELAY_PORT)
   --relay-key <path>   Private key to auto-authorise the tunnel on the relay
   --no-tunnel          Skip the reverse tunnel (LAN access only)
+  --no-wifi            Skip Wi-Fi hardening (autoconnect / power-save off)
   -h, --help           Show this help
 EOF
 }
@@ -57,6 +60,7 @@ while [ $# -gt 0 ]; do
     --port)        RELAY_PORT="$2"; shift 2 ;;
     --relay-key)   RELAY_IDENTITY="$2"; shift 2 ;;
     --no-tunnel)   INSTALL_TUNNEL="no"; shift ;;
+    --no-wifi)     WIFI_HARDEN="no"; shift ;;
     -h|--help)     usage; exit 0 ;;
     *) die "Unknown option: $1" ;;
   esac
@@ -129,10 +133,29 @@ if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>
   firewall-cmd --reload >/dev/null || true
 fi
 
-# ------------------------------- 6. mDNS -----------------------------------
+# --------------------------- 6. Wi-Fi hardening -----------------------------
+if [ "$WIFI_HARDEN" = yes ]; then
+  if command -v nmcli >/dev/null 2>&1; then
+    log "Hardening Wi-Fi (NetworkManager): autoconnect on, power-save off"
+    systemctl enable --now NetworkManager >/dev/null 2>&1 || true
+    systemctl enable --now NetworkManager-wait-online.service >/dev/null 2>&1 || true
+    while IFS=: read -r NAME TYPE; do
+      [ "$TYPE" = "802-11-wireless" ] || continue
+      nmcli connection modify "$NAME" connection.autoconnect yes          >/dev/null 2>&1 || true
+      nmcli connection modify "$NAME" connection.autoconnect-retries 0    >/dev/null 2>&1 || true
+      nmcli connection modify "$NAME" 802-11-wireless.powersave 2         >/dev/null 2>&1 || true
+      log "  tuned Wi-Fi profile: $NAME"
+    done < <(nmcli -t -f NAME,TYPE connection show 2>/dev/null)
+  else
+    warn "NetworkManager (nmcli) not found — set Wi-Fi to autoconnect and"
+    warn "disable power-save manually if the box keeps dropping off Wi-Fi."
+  fi
+fi
+
+# ------------------------------- 7. mDNS -----------------------------------
 systemctl enable --now avahi-daemon 2>/dev/null || systemctl enable --now avahi 2>/dev/null || true
 
-# -------------------------- 7. reverse tunnel ------------------------------
+# -------------------------- 8. reverse tunnel ------------------------------
 TUNNEL_PUB=""
 TUNNEL_KEY="$HOME_DIR/.ssh/relay_tunnel_ed25519"
 if [ "$INSTALL_TUNNEL" = yes ]; then

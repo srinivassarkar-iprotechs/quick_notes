@@ -166,6 +166,7 @@ if [ "$INSTALL_TUNNEL" = yes ]; then
   chown "$SSH_USER:$SSH_USER" "$TUNNEL_KEY" "$TUNNEL_KEY.pub"
   chmod 600 "$TUNNEL_KEY"; chmod 644 "$TUNNEL_KEY.pub"
   TUNNEL_PUB="$(cat "$TUNNEL_KEY.pub")"
+  TUNNEL_FP="$(ssh-keygen -lf "$TUNNEL_KEY.pub" 2>/dev/null | awk '{print $2}')"
 
   TUNNEL_BIN="$(command -v autossh || command -v ssh)"
   log "Installing self-healing tunnel service (-> ${RELAY_USER}@${RELAY_HOST}:${RELAY_PORT})"
@@ -221,13 +222,19 @@ EOF
 if [ "$INSTALL_TUNNEL" = yes ] && [ -z "$RELAY_IDENTITY" ]; then
   cat <<EOF
 
-  ONE LAST STEP — authorise this box on the relay (run once, on
-  ${RELAY_USER}@${RELAY_HOST}):
+  ONE LAST STEP — authorise this box on the relay ${RELAY_USER}@${RELAY_HOST}
+  (run once).  Tunnel key fingerprint: ${TUNNEL_FP:-<unknown>}
 
-      echo '${TUNNEL_PUB}' >> ~/.ssh/authorized_keys
-      chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
+  Do NOT retype the key by hand — copy/paste corrupts it. Use one of these:
 
-  Re-run this script with --relay-key <path> to do that part automatically.
+  A) From a machine that already has SSH access to BOTH the box and relay:
+       scp ${SSH_USER}@${HOSTNAME_FQDN}.local:${TUNNEL_KEY}.pub /tmp/box.pub
+       ssh ${RELAY_USER}@${RELAY_HOST} 'mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys' < /tmp/box.pub
+
+  B) Re-run this script on the box with your relay key (does it automatically):
+       sudo bash $0 --relay-key /path/to/relay_key.pem
+
+  Verify after:  ssh -J ${RELAY_USER}@${RELAY_HOST} -p ${RELAY_PORT} ${SSH_USER}@127.0.0.1
 EOF
 fi
 
